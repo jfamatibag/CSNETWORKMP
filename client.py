@@ -143,5 +143,11 @@ def connect_to_mtgnp(player_id, host='127.0.0.1', port=4444):
         client_socket.close()
 
 if __name__ == "__main__":
+    # Get Player ID and Server IP from command arguments or prompts
     player_identifier = sys.argv[1] if len(sys.argv) > 1 else input("Enter unique Player ID: ")
-    connect_to_mtgnp(player_id=player_identifier)
+    server_ip = sys.argv[2] if len(sys.argv) > 2 else input("Enter Server IP Address (default: 127.0.0.1): ").strip()
+    
+    if not server_ip:
+        server_ip = '127.0.0.1'
+
+    connect_to_mtgnp(player_id=player_identifier, host=server_ip)
