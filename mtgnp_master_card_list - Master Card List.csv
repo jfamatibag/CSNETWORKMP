@@ -1,4 +1,3 @@
-MTGNP Master Card List — RFC-DNDMP-001  |  Fixed Pre-Defined Card Set,,,,,,,,,,,,,,,
 Card ID Base,Card Name,Card Type,Subtype,Color,CMC,W,U,B,R,G,Generic,Power,Toughness,Copies in Set,Simplified Effect
 mountain,Mountain,Land,Basic Mountain,R,0,0,0,0,0,0,0,-,-,20,Tap: Add {R}.
 forest,Forest,Land,Basic Forest,G,0,0,0,0,0,0,0,-,-,20,Tap: Add {G}.
