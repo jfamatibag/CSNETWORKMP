@@ -54,8 +54,23 @@ def prompt_cards_for_bottom(hand: list, mulligan_count: int) -> list:
 
 def connect_to_mtgnp(player_id, host='127.0.0.1', port=4444):
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((host, port))
-    print(f"Connected to MTGNP server as '{player_id}'...")
+    
+    # Safely attempt socket connection (Line 57 fix)
+    try:
+        print(f"Connecting to MTGNP server at {host}:{port} as '{player_id}'...")
+        client_socket.connect((host, int(port)))
+        print("Connected successfully!")
+    except ConnectionRefusedError:
+        print(f"\n[ERROR] Connection Refused: server.py is NOT running on {host}:{port}.")
+        print("-> Make sure server.py is running in another terminal window first.")
+        return
+    except TimeoutError:
+        print(f"\n[ERROR] Connection Timed Out: Host {host} did not respond.")
+        print("-> Check if Windows Firewall is blocking Port 4444 on the server machine.")
+        return
+    except Exception as e:
+        print(f"\n[ERROR] Could not connect to {host}:{port} -> {e}")
+        return
 
     deck = load_deck_from_csv(deck_size=20)
 
@@ -143,11 +158,10 @@ def connect_to_mtgnp(player_id, host='127.0.0.1', port=4444):
         client_socket.close()
 
 if __name__ == "__main__":
-    # Get Player ID and Server IP from command arguments or prompts
     player_identifier = sys.argv[1] if len(sys.argv) > 1 else input("Enter unique Player ID: ")
-    server_ip = sys.argv[2] if len(sys.argv) > 2 else input("Enter Server IP Address (default: 127.0.0.1): ").strip()
     
-    if not server_ip:
-        server_ip = '127.0.0.1'
+    target_ip = sys.argv[2] if len(sys.argv) > 2 else input("Enter Server IP Address (press Enter for 127.0.0.1): ").strip()
+    if not target_ip:
+        target_ip = "127.0.0.1"
 
-    connect_to_mtgnp(player_id=player_identifier, host=server_ip)
+    connect_to_mtgnp(player_id=player_identifier, host=target_ip)
