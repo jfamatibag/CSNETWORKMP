@@ -1,0 +1,314 @@
+MTGNP Card Instances — Individual card_id values used in protocol messages,,,,
+card_id (protocol reference),Card Name,Card Type,Color,Copy #
+mountain_001,Mountain,Land,R,1
+mountain_002,Mountain,Land,R,2
+mountain_003,Mountain,Land,R,3
+mountain_004,Mountain,Land,R,4
+mountain_005,Mountain,Land,R,5
+mountain_006,Mountain,Land,R,6
+mountain_007,Mountain,Land,R,7
+mountain_008,Mountain,Land,R,8
+mountain_009,Mountain,Land,R,9
+mountain_010,Mountain,Land,R,10
+mountain_011,Mountain,Land,R,11
+mountain_012,Mountain,Land,R,12
+mountain_013,Mountain,Land,R,13
+mountain_014,Mountain,Land,R,14
+mountain_015,Mountain,Land,R,15
+mountain_016,Mountain,Land,R,16
+mountain_017,Mountain,Land,R,17
+mountain_018,Mountain,Land,R,18
+mountain_019,Mountain,Land,R,19
+mountain_020,Mountain,Land,R,20
+forest_001,Forest,Land,G,1
+forest_002,Forest,Land,G,2
+forest_003,Forest,Land,G,3
+forest_004,Forest,Land,G,4
+forest_005,Forest,Land,G,5
+forest_006,Forest,Land,G,6
+forest_007,Forest,Land,G,7
+forest_008,Forest,Land,G,8
+forest_009,Forest,Land,G,9
+forest_010,Forest,Land,G,10
+forest_011,Forest,Land,G,11
+forest_012,Forest,Land,G,12
+forest_013,Forest,Land,G,13
+forest_014,Forest,Land,G,14
+forest_015,Forest,Land,G,15
+forest_016,Forest,Land,G,16
+forest_017,Forest,Land,G,17
+forest_018,Forest,Land,G,18
+forest_019,Forest,Land,G,19
+forest_020,Forest,Land,G,20
+plains_001,Plains,Land,W,1
+plains_002,Plains,Land,W,2
+plains_003,Plains,Land,W,3
+plains_004,Plains,Land,W,4
+plains_005,Plains,Land,W,5
+plains_006,Plains,Land,W,6
+plains_007,Plains,Land,W,7
+plains_008,Plains,Land,W,8
+plains_009,Plains,Land,W,9
+plains_010,Plains,Land,W,10
+plains_011,Plains,Land,W,11
+plains_012,Plains,Land,W,12
+plains_013,Plains,Land,W,13
+plains_014,Plains,Land,W,14
+plains_015,Plains,Land,W,15
+plains_016,Plains,Land,W,16
+plains_017,Plains,Land,W,17
+plains_018,Plains,Land,W,18
+plains_019,Plains,Land,W,19
+plains_020,Plains,Land,W,20
+island_001,Island,Land,U,1
+island_002,Island,Land,U,2
+island_003,Island,Land,U,3
+island_004,Island,Land,U,4
+island_005,Island,Land,U,5
+island_006,Island,Land,U,6
+island_007,Island,Land,U,7
+island_008,Island,Land,U,8
+island_009,Island,Land,U,9
+island_010,Island,Land,U,10
+island_011,Island,Land,U,11
+island_012,Island,Land,U,12
+island_013,Island,Land,U,13
+island_014,Island,Land,U,14
+island_015,Island,Land,U,15
+island_016,Island,Land,U,16
+island_017,Island,Land,U,17
+island_018,Island,Land,U,18
+island_019,Island,Land,U,19
+island_020,Island,Land,U,20
+swamp_001,Swamp,Land,B,1
+swamp_002,Swamp,Land,B,2
+swamp_003,Swamp,Land,B,3
+swamp_004,Swamp,Land,B,4
+swamp_005,Swamp,Land,B,5
+swamp_006,Swamp,Land,B,6
+swamp_007,Swamp,Land,B,7
+swamp_008,Swamp,Land,B,8
+swamp_009,Swamp,Land,B,9
+swamp_010,Swamp,Land,B,10
+swamp_011,Swamp,Land,B,11
+swamp_012,Swamp,Land,B,12
+swamp_013,Swamp,Land,B,13
+swamp_014,Swamp,Land,B,14
+swamp_015,Swamp,Land,B,15
+swamp_016,Swamp,Land,B,16
+swamp_017,Swamp,Land,B,17
+swamp_018,Swamp,Land,B,18
+swamp_019,Swamp,Land,B,19
+swamp_020,Swamp,Land,B,20
+lightning_bolt_001,Lightning Bolt,Instant,R,1
+lightning_bolt_002,Lightning Bolt,Instant,R,2
+lightning_bolt_003,Lightning Bolt,Instant,R,3
+lightning_bolt_004,Lightning Bolt,Instant,R,4
+shock_001,Shock,Instant,R,1
+shock_002,Shock,Instant,R,2
+shock_003,Shock,Instant,R,3
+shock_004,Shock,Instant,R,4
+lava_spike_001,Lava Spike,Sorcery,R,1
+lava_spike_002,Lava Spike,Sorcery,R,2
+lava_spike_003,Lava Spike,Sorcery,R,3
+lava_spike_004,Lava Spike,Sorcery,R,4
+flame_slash_001,Flame Slash,Sorcery,R,1
+flame_slash_002,Flame Slash,Sorcery,R,2
+flame_slash_003,Flame Slash,Sorcery,R,3
+flame_slash_004,Flame Slash,Sorcery,R,4
+searing_spear_001,Searing Spear,Instant,R,1
+searing_spear_002,Searing Spear,Instant,R,2
+searing_spear_003,Searing Spear,Instant,R,3
+searing_spear_004,Searing Spear,Instant,R,4
+skullcrack_001,Skullcrack,Instant,R,1
+skullcrack_002,Skullcrack,Instant,R,2
+skullcrack_003,Skullcrack,Instant,R,3
+skullcrack_004,Skullcrack,Instant,R,4
+rift_bolt_001,Rift Bolt,Sorcery,R,1
+rift_bolt_002,Rift Bolt,Sorcery,R,2
+rift_bolt_003,Rift Bolt,Sorcery,R,3
+rift_bolt_004,Rift Bolt,Sorcery,R,4
+incinerate_001,Incinerate,Instant,R,1
+incinerate_002,Incinerate,Instant,R,2
+incinerate_003,Incinerate,Instant,R,3
+incinerate_004,Incinerate,Instant,R,4
+goblin_guide_001,Goblin Guide,Creature,R,1
+goblin_guide_002,Goblin Guide,Creature,R,2
+goblin_guide_003,Goblin Guide,Creature,R,3
+goblin_guide_004,Goblin Guide,Creature,R,4
+goblin_bushwhacker_001,Goblin Bushwhacker,Creature,R,1
+goblin_bushwhacker_002,Goblin Bushwhacker,Creature,R,2
+goblin_bushwhacker_003,Goblin Bushwhacker,Creature,R,3
+goblin_bushwhacker_004,Goblin Bushwhacker,Creature,R,4
+reckless_wurm_001,Reckless Wurm,Creature,R,1
+reckless_wurm_002,Reckless Wurm,Creature,R,2
+reckless_wurm_003,Reckless Wurm,Creature,R,3
+reckless_wurm_004,Reckless Wurm,Creature,R,4
+monastery_swiftspear_001,Monastery Swiftspear,Creature,R,1
+monastery_swiftspear_002,Monastery Swiftspear,Creature,R,2
+monastery_swiftspear_003,Monastery Swiftspear,Creature,R,3
+monastery_swiftspear_004,Monastery Swiftspear,Creature,R,4
+counterspell_001,Counterspell,Instant,U,1
+counterspell_002,Counterspell,Instant,U,2
+counterspell_003,Counterspell,Instant,U,3
+counterspell_004,Counterspell,Instant,U,4
+cancel_001,Cancel,Instant,U,1
+cancel_002,Cancel,Instant,U,2
+cancel_003,Cancel,Instant,U,3
+cancel_004,Cancel,Instant,U,4
+unsummon_001,Unsummon,Instant,U,1
+unsummon_002,Unsummon,Instant,U,2
+unsummon_003,Unsummon,Instant,U,3
+unsummon_004,Unsummon,Instant,U,4
+ponder_001,Ponder,Sorcery,U,1
+ponder_002,Ponder,Sorcery,U,2
+ponder_003,Ponder,Sorcery,U,3
+ponder_004,Ponder,Sorcery,U,4
+negate_001,Negate,Instant,U,1
+negate_002,Negate,Instant,U,2
+negate_003,Negate,Instant,U,3
+negate_004,Negate,Instant,U,4
+mana_leak_001,Mana Leak,Instant,U,1
+mana_leak_002,Mana Leak,Instant,U,2
+mana_leak_003,Mana Leak,Instant,U,3
+mana_leak_004,Mana Leak,Instant,U,4
+merfolk_looter_001,Merfolk Looter,Creature,U,1
+merfolk_looter_002,Merfolk Looter,Creature,U,2
+merfolk_looter_003,Merfolk Looter,Creature,U,3
+merfolk_looter_004,Merfolk Looter,Creature,U,4
+prodigal_sorcerer_001,Prodigal Sorcerer,Creature,U,1
+prodigal_sorcerer_002,Prodigal Sorcerer,Creature,U,2
+prodigal_sorcerer_003,Prodigal Sorcerer,Creature,U,3
+prodigal_sorcerer_004,Prodigal Sorcerer,Creature,U,4
+air_elemental_001,Air Elemental,Creature,U,1
+air_elemental_002,Air Elemental,Creature,U,2
+air_elemental_003,Air Elemental,Creature,U,3
+air_elemental_004,Air Elemental,Creature,U,4
+phantasmal_bear_001,Phantasmal Bear,Creature,U,1
+phantasmal_bear_002,Phantasmal Bear,Creature,U,2
+phantasmal_bear_003,Phantasmal Bear,Creature,U,3
+phantasmal_bear_004,Phantasmal Bear,Creature,U,4
+giant_growth_001,Giant Growth,Instant,G,1
+giant_growth_002,Giant Growth,Instant,G,2
+giant_growth_003,Giant Growth,Instant,G,3
+giant_growth_004,Giant Growth,Instant,G,4
+rampant_growth_001,Rampant Growth,Sorcery,G,1
+rampant_growth_002,Rampant Growth,Sorcery,G,2
+rampant_growth_003,Rampant Growth,Sorcery,G,3
+rampant_growth_004,Rampant Growth,Sorcery,G,4
+naturalize_001,Naturalize,Instant,G,1
+naturalize_002,Naturalize,Instant,G,2
+naturalize_003,Naturalize,Instant,G,3
+naturalize_004,Naturalize,Instant,G,4
+vines_of_vastwood_001,Vines of Vastwood,Instant,G,1
+vines_of_vastwood_002,Vines of Vastwood,Instant,G,2
+vines_of_vastwood_003,Vines of Vastwood,Instant,G,3
+vines_of_vastwood_004,Vines of Vastwood,Instant,G,4
+llanowar_elves_001,Llanowar Elves,Creature,G,1
+llanowar_elves_002,Llanowar Elves,Creature,G,2
+llanowar_elves_003,Llanowar Elves,Creature,G,3
+llanowar_elves_004,Llanowar Elves,Creature,G,4
+elvish_mystic_001,Elvish Mystic,Creature,G,1
+elvish_mystic_002,Elvish Mystic,Creature,G,2
+elvish_mystic_003,Elvish Mystic,Creature,G,3
+elvish_mystic_004,Elvish Mystic,Creature,G,4
+grizzly_bears_001,Grizzly Bears,Creature,G,1
+grizzly_bears_002,Grizzly Bears,Creature,G,2
+grizzly_bears_003,Grizzly Bears,Creature,G,3
+grizzly_bears_004,Grizzly Bears,Creature,G,4
+leatherback_baloth_001,Leatherback Baloth,Creature,G,1
+leatherback_baloth_002,Leatherback Baloth,Creature,G,2
+leatherback_baloth_003,Leatherback Baloth,Creature,G,3
+leatherback_baloth_004,Leatherback Baloth,Creature,G,4
+troll_ascetic_001,Troll Ascetic,Creature,G,1
+troll_ascetic_002,Troll Ascetic,Creature,G,2
+troll_ascetic_003,Troll Ascetic,Creature,G,3
+troll_ascetic_004,Troll Ascetic,Creature,G,4
+wall_of_stone_001,Wall of Stone,Creature,R,1
+wall_of_stone_002,Wall of Stone,Creature,R,2
+wall_of_stone_003,Wall of Stone,Creature,R,3
+wall_of_stone_004,Wall of Stone,Creature,R,4
+swords_to_plowshares_001,Swords to Plowshares,Instant,W,1
+swords_to_plowshares_002,Swords to Plowshares,Instant,W,2
+swords_to_plowshares_003,Swords to Plowshares,Instant,W,3
+swords_to_plowshares_004,Swords to Plowshares,Instant,W,4
+path_to_exile_001,Path to Exile,Instant,W,1
+path_to_exile_002,Path to Exile,Instant,W,2
+path_to_exile_003,Path to Exile,Instant,W,3
+path_to_exile_004,Path to Exile,Instant,W,4
+healing_salve_001,Healing Salve,Instant,W,1
+healing_salve_002,Healing Salve,Instant,W,2
+healing_salve_003,Healing Salve,Instant,W,3
+healing_salve_004,Healing Salve,Instant,W,4
+pacifism_001,Pacifism,Enchantment,W,1
+pacifism_002,Pacifism,Enchantment,W,2
+pacifism_003,Pacifism,Enchantment,W,3
+pacifism_004,Pacifism,Enchantment,W,4
+white_knight_001,White Knight,Creature,W,1
+white_knight_002,White Knight,Creature,W,2
+white_knight_003,White Knight,Creature,W,3
+white_knight_004,White Knight,Creature,W,4
+serra_angel_001,Serra Angel,Creature,W,1
+serra_angel_002,Serra Angel,Creature,W,2
+serra_angel_003,Serra Angel,Creature,W,3
+serra_angel_004,Serra Angel,Creature,W,4
+savannah_lions_001,Savannah Lions,Creature,W,1
+savannah_lions_002,Savannah Lions,Creature,W,2
+savannah_lions_003,Savannah Lions,Creature,W,3
+savannah_lions_004,Savannah Lions,Creature,W,4
+mother_of_runes_001,Mother of Runes,Creature,W,1
+mother_of_runes_002,Mother of Runes,Creature,W,2
+mother_of_runes_003,Mother of Runes,Creature,W,3
+mother_of_runes_004,Mother of Runes,Creature,W,4
+dark_ritual_001,Dark Ritual,Instant,B,1
+dark_ritual_002,Dark Ritual,Instant,B,2
+dark_ritual_003,Dark Ritual,Instant,B,3
+dark_ritual_004,Dark Ritual,Instant,B,4
+terror_001,Terror,Instant,B,1
+terror_002,Terror,Instant,B,2
+terror_003,Terror,Instant,B,3
+terror_004,Terror,Instant,B,4
+doom_blade_001,Doom Blade,Instant,B,1
+doom_blade_002,Doom Blade,Instant,B,2
+doom_blade_003,Doom Blade,Instant,B,3
+doom_blade_004,Doom Blade,Instant,B,4
+raise_dead_001,Raise Dead,Sorcery,B,1
+raise_dead_002,Raise Dead,Sorcery,B,2
+raise_dead_003,Raise Dead,Sorcery,B,3
+raise_dead_004,Raise Dead,Sorcery,B,4
+mind_rot_001,Mind Rot,Sorcery,B,1
+mind_rot_002,Mind Rot,Sorcery,B,2
+mind_rot_003,Mind Rot,Sorcery,B,3
+mind_rot_004,Mind Rot,Sorcery,B,4
+gray_merchant_001,Gray Merchant of Asphodel,Creature,B,1
+gray_merchant_002,Gray Merchant of Asphodel,Creature,B,2
+gray_merchant_003,Gray Merchant of Asphodel,Creature,B,3
+gray_merchant_004,Gray Merchant of Asphodel,Creature,B,4
+gravedigger_001,Gravedigger,Creature,B,1
+gravedigger_002,Gravedigger,Creature,B,2
+gravedigger_003,Gravedigger,Creature,B,3
+gravedigger_004,Gravedigger,Creature,B,4
+royal_assassin_001,Royal Assassin,Creature,B,1
+royal_assassin_002,Royal Assassin,Creature,B,2
+royal_assassin_003,Royal Assassin,Creature,B,3
+royal_assassin_004,Royal Assassin,Creature,B,4
+black_knight_001,Black Knight,Creature,B,1
+black_knight_002,Black Knight,Creature,B,2
+black_knight_003,Black Knight,Creature,B,3
+black_knight_004,Black Knight,Creature,B,4
+sol_ring_001,Sol Ring,Artifact,C,1
+sol_ring_002,Sol Ring,Artifact,C,2
+sol_ring_003,Sol Ring,Artifact,C,3
+sol_ring_004,Sol Ring,Artifact,C,4
+ornithopter_001,Ornithopter,Artifact Creature,C,1
+ornithopter_002,Ornithopter,Artifact Creature,C,2
+ornithopter_003,Ornithopter,Artifact Creature,C,3
+ornithopter_004,Ornithopter,Artifact Creature,C,4
+millstone_001,Millstone,Artifact,C,1
+millstone_002,Millstone,Artifact,C,2
+millstone_003,Millstone,Artifact,C,3
+millstone_004,Millstone,Artifact,C,4
+rod_of_ruin_001,Rod of Ruin,Artifact,C,1
+rod_of_ruin_002,Rod of Ruin,Artifact,C,2
+rod_of_ruin_003,Rod of Ruin,Artifact,C,3
+rod_of_ruin_004,Rod of Ruin,Artifact,C,4
