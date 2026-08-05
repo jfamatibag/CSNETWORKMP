@@ -79,6 +79,83 @@ def load_deck_from_csv(custom_deck_file, instance_file="mtgnp_master_card_list -
     print(f"[*] Successfully loaded {len(deck)} cards from '{custom_deck_file}'.")
     return deck
 
+def load_master_card_db(master_file="mtgnp_master_card_list - Master Card List.csv"):
+    """Loads card base stats (Power, Toughness, Types) into memory."""
+    master_db = {}
+    if not os.path.exists(master_file):
+        return master_db
+
+    with open(master_file, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            base_id = row.get("Card ID Base", "").strip().lower()
+            if base_id:
+                master_db[base_id] = row
+    return master_db
+
+MASTER_CARD_DB = load_master_card_db()
+
+def format_battlefield(battlefield_dict):
+    """Formats the battlefield dictionary with base P/T and active buffs per line."""
+    lines = ["=== BATTLEFIELD ==="]
+    
+    if not battlefield_dict:
+        lines.append("  (No permanents in play)")
+        return "\n".join(lines)
+
+    for player_id, permanents in battlefield_dict.items():
+        lines.append(f"[{player_id}]")
+        if not permanents:
+            lines.append("  (No permanents)")
+            continue
+            
+        for perm_id, details in permanents.items():
+            # Derive base card ID (e.g. 'goblin_guide_002' -> 'goblin_guide')
+            base_id = perm_id.rsplit('_', 1)[0].lower() if '_' in perm_id else perm_id.lower()
+            card_info = MASTER_CARD_DB.get(base_id, {})
+            card_name = card_info.get("Card Name", perm_id)
+            card_type = card_info.get("Card Type", "")
+
+            # Extract P/T stats if creature
+            pt_str = ""
+            base_p = card_info.get("Power")
+            base_t = card_info.get("Toughness")
+
+            if base_p is not None and base_t is not None and str(base_p).strip() != "":
+                try:
+                    bp = int(base_p)
+                    bt = int(base_t)
+                    buffs = details.get("buffs", {})
+                    tot_p = bp + buffs.get("power", 0)
+                    tot_t = bt + buffs.get("toughness", 0)
+                    
+                    if buffs.get("power", 0) != 0 or buffs.get("toughness", 0) != 0:
+                        pt_str = f" <{tot_p}/{tot_t} (Base: {bp}/{bt})>"
+                    else:
+                        pt_str = f" <{tot_p}/{tot_t}>"
+                except ValueError:
+                    pt_str = f" <{base_p}/{base_t}>"
+
+            # Status flags
+            status_flags = []
+            if details.get("tapped"):
+                status_flags.append("Tapped")
+            else:
+                status_flags.append("Untapped")
+                
+            if details.get("summoning_sick"):
+                status_flags.append("Summoning Sick")
+                
+            if details.get("auras"):
+                status_flags.append(f"Auras: {', '.join(details['auras'])}")
+                
+            status_str = f"[{', '.join(status_flags)}]"
+
+            # Format permanent line with name, P/T, and status flags
+            lines.append(f"  - {perm_id} ({card_name}){pt_str} {status_str}")
+
+    return "\n".join(lines)
+
 
 class MTGNPClient:
     def __init__(self, player_id, deck_list):
@@ -136,7 +213,7 @@ class MTGNPClient:
             if pdu.get("player_id") == self.player_id:
                 self.current_priority_seq = pdu.get("seq_num")
                 print(f"\n[>>> PRIORITY GRANTED <<<] Token seq_num: {self.current_priority_seq}")
-                print("Commands: 'pass', 'land <card_id>', 'cast <card_id> [target]', 'attack <creature_id> [target]', 'block <blocker_id> <attacker_id>'")
+                print("Commands: 'pass', 'land <card_id>', 'cast <card_id> [mana_land_id] [target]', 'attack <creature_id> [target]', 'block <blocker_id> <attacker_id>'")
 
         elif pdu_type == "GAME_STATE_UPDATE":
             state = pdu.get("state", {})
@@ -144,12 +221,15 @@ class MTGNPClient:
             print(f"\n--- STATE UPDATE (Turn {state.get('turn')}, Phase: {phase}) ---")
             print(f"Life: {state.get('life_totals')}")
             print(f"Your Hand: {state.get('hand', {}).get(self.player_id, [])}")
-            print(f"Battlefield: {state.get('battlefield')}")
+            
+            # Print formatted multi-line battlefield representation
+            if "battlefield_text" in state:
+                print(state["battlefield_text"])
+            elif "battlefield" in state:
+                print(format_battlefield(state["battlefield"]))
+                
             print(f"Stack: {state.get('stack')}")
 
-            # ==========================================
-            # INSERT THE ATTACKING NOTIFICATION HERE
-            # ==========================================
             if phase == "COMBAT_BLOCKERS":
                 attackers = state.get("combat", {}).get("attackers", [])
                 active_player = state.get("active_player")
@@ -162,13 +242,12 @@ class MTGNPClient:
                         cid = att.get("creature_id")
                         print(f"[*] {active_player} is attacking you with: {cid}!")
                     print("="*40 + "\n")
-            # ==========================================
 
             if phase == "MULLIGAN":
                 mull_info = state.get("mulligans", {}).get(self.player_id, {})
                 mull_count = mull_info.get("count", 0)
                 
-                if mull_info.get("status") != "KEPT":
+                if not mull_info.get("kept", False) and mull_info.get("status") != "KEPT":                    
                     print("\n[MULLIGAN PHASE] Commands:")
                     if mull_count == 0:
                         print("  - Type 'keep' to keep this hand.")
@@ -183,8 +262,6 @@ class MTGNPClient:
 
         elif pdu_type == "GAME_OVER":
             print(f"\n[GAME OVER] Winner: {pdu.get('winner_id')} | Reason: {pdu.get('reason')}")
-            
-            # Ask to rematch instead of killing the connection
             print("\nWould you like to play again? Type 'ready' to restart or 'quit' to exit.")
 
         else:
@@ -234,11 +311,26 @@ class MTGNPClient:
                     self.send_pdu({"type": "PLAY_LAND", "seq_num": self.current_priority_seq, "card_id": cmd[1]})
 
                 elif action == "cast" and len(cmd) > 1:
+                    card_id = cmd[1]
+                    raw_args = cmd[2:]
+                    
+                    land_keywords = ("island", "mountain", "swamp", "forest", "plains")
+                    mana_payment = []
+                    targets = []
+                    
+                    # Sort the remaining arguments into lands vs. targets
+                    for arg in raw_args:
+                        if any(lk in arg.lower() for lk in land_keywords):
+                            mana_payment.append(arg)
+                        else:
+                            targets.append(arg)
+
                     self.send_pdu({
                         "type": "CAST_SPELL",
                         "seq_num": self.current_priority_seq,
-                        "card_id": cmd[1],
-                        "targets": [cmd[2]] if len(cmd) > 2 else []
+                        "card_id": card_id,
+                        "mana_payment": mana_payment,
+                        "targets": targets
                     })
 
                 elif action == "attack" and len(cmd) > 1:
@@ -264,7 +356,6 @@ class MTGNPClient:
                 elif action == "concede":
                     self.send_pdu({"type": "CONCEDE", "seq_num": 1, "player_id": self.player_id})
 
-                # Inside interactive_loop(self)
                 elif action == "quit":
                     self.running = False
                     
