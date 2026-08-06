@@ -1,3 +1,4 @@
+# game_state.py
 import json
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
@@ -24,9 +25,10 @@ class GameState:
     stack: List[Dict[str, Any]] = field(default_factory=list)
     seq_num: int = 0
     waiting_for: List[str] = field(default_factory=list)
+    consecutive_passes: int = 0  # Internal optimization tracker for stack resolution
 
     def generate_lobby_update(self) -> dict:
-        """Generates a LOBBY state update."""
+        """Generates a LOBBY state update matching section 10.2.2."""
         return {
             "type": "GAME_STATE_UPDATE",
             "seq_num": self.seq_num,
@@ -38,36 +40,40 @@ class GameState:
         }
 
     def generate_personalized_update(self, target_player_id: str) -> dict:
-        """Filters hidden state (opponent's hand) to generate an in-game update."""
+        """Filters hidden state (opponent's hand) to generate an in-game update matching section 10.2.2."""
         life_totals = {}
         hand_counts = {}
         library_counts = {}
-        battlefield = {}
-        graveyard = {}
+        battlefield_data = {}
+        graveyard_data = {}
 
         for p_id, p_state in self.players.items():
             life_totals[p_id] = p_state.life
             hand_counts[p_id] = len(p_state.hand)
             library_counts[p_id] = len(p_state.library)
-            battlefield[p_id] = p_state.battlefield
-            graveyard[p_id] = p_state.graveyard
+            battlefield_data[p_id] = p_state.battlefield
+            graveyard_data[p_id] = p_state.graveyard
+
+        # Section 10.2.2: priority_holder is explicitly null during UNTAP and CLEANUP steps
+        current_priority = self.priority_holder
+        if self.phase in ["UNTAP", "CLEANUP"]:
+            current_priority = None
 
         state_dict = {
             "turn": self.turn,
-            "phase": self.phase,
             "active_player": self.active_player,
+            "phase": self.phase,
+            "priority_holder": current_priority,
             "life_totals": life_totals,
-            "hand": self.players[target_player_id].hand,
+            "stack": self.stack,
+            "battlefield": battlefield_data,
+            "graveyard": graveyard_data,
+            "hand": self.players[target_player_id].hand,  # Opponent's hand is cleanly stripped out
             "hand_counts": hand_counts,
             "library_counts": library_counts,
-            "battlefield": battlefield,
-            "graveyard": graveyard,
-            "stack": self.stack
+            # Section 10.2.2 requires exposing land tracking state boolean
+            "land_played_this_turn": self.players[target_player_id].land_played_this_turn
         }
-
-        # Add land_played flag if the target is the active player
-        if self.active_player == target_player_id:
-            state_dict["land_played"] = self.players[target_player_id].land_played_this_turn
 
         return {
             "type": "GAME_STATE_UPDATE",
