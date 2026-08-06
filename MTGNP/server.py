@@ -368,6 +368,68 @@ def validate_mana_payment(card_id, card_data, mana_payment_lands):
 
     return True, ""
 
+def evaluate_triggers(event_type, event_data):
+    """
+    Passively scans all permanents on the battlefield for triggered abilities 
+    matching the event_type and pushes them to the stack.
+    """
+    triggers_fired = 0
+    
+    for player_id, permanents in game_state.get("battlefield", {}).items():
+        for perm_id, details in list(permanents.items()):
+            c_data = get_card_data(perm_id)
+            if not c_data: 
+                continue
+            
+            effect = get_card_field(c_data, "Simplified Effect", "Effect", "Text").lower()
+            trigger_obj = None
+
+            # --- EVENT: SPELL CAST ---
+            if event_type == "CAST":
+                caster = event_data.get("caster")
+                spell_type = event_data.get("spell_type", "").lower()
+                
+                if "prowess" in effect and caster == player_id and "creature" not in spell_type and "land" not in spell_type:
+                    trigger_obj = {
+                        "type": "TRIGGER",
+                        "trigger_type": "PROWESS",
+                        "card_id": perm_id,
+                        "caster": player_id,
+                        "targets": []
+                    }
+
+            # --- EVENT: ETB ---
+            elif event_type == "ETB":
+                entering_id = event_data.get("card_id")
+                pass 
+
+            # --- HOOK 4: DIES / LEAVES ---
+            elif event_type in ["DIES", "LEAVES"]:
+                leaving_id = event_data.get("card_id")
+                # Example: Blood Artist death trigger
+                if "whenever a creature dies" in effect or "blood artist" in perm_id.lower():
+                    trigger_obj = {
+                        "type": "TRIGGER",
+                        "trigger_type": "CREATURE_DIES",
+                        "card_id": perm_id,
+                        "caster": player_id,
+                        "targets": []
+                    }
+
+            # --- HOOK 4: DAMAGE ---
+            elif event_type == "DAMAGE":
+                target_p = event_data.get("target")
+                source_id = event_data.get("source")
+                # Add triggers like "Whenever equipped creature deals combat damage to a player..."
+                pass
+                
+            if trigger_obj:
+                game_state["stack"].append(trigger_obj)
+                triggers_fired += 1
+                print(f"[*] ⚡ Trigger added to stack: {trigger_obj['trigger_type']} from {perm_id}")
+
+    return triggers_fired > 0
+
 def resolve_top_of_stack():
     """Resolves the top item on the stack when all players pass priority in succession."""
     if not game_state["stack"]:
@@ -378,12 +440,26 @@ def resolve_top_of_stack():
     card_id = item["card_id"]
     targets = item.get("targets", [])
     item_type = item.get("type", "SPELL")
-    base_id = INSTANCE_TO_BASE.get(card_id, "")
-    card_data = get_card_data(card_id) or {}
-    card_type = get_card_field(card_data, "Card Type", "Type")
-
-    target_str = f" targeting [{', '.join(targets)}]" if targets else " (no target)"
-    print(f"[*] Resolving {item_type} '{card_id}' (Base: {base_id}){target_str} from stack.")
+    
+    # --- FIX: Define base_id and card_type before evaluation ---
+    base_id = INSTANCE_TO_BASE.get(card_id) or (card_id.rsplit('_', 1)[0].lower() if '_' in card_id else card_id.lower())
+    c_data = MASTER_CARD_DB.get(base_id, {})
+    card_type = get_card_field(c_data, "Card Type", "Type")
+    # -----------------------------------------------------------
+    
+    # ==========================================
+    # 0. RESOLVE AUTOMATED TRIGGERS
+    # ==========================================
+    if item_type == "TRIGGER":
+        trigger_type = item.get("trigger_type")
+        if trigger_type == "PROWESS":
+            if card_id in game_state["battlefield"].get(caster, {}):
+                game_state["battlefield"][caster][card_id]["buffs"]["power"] += 1
+                game_state["battlefield"][caster][card_id]["buffs"]["toughness"] += 1
+                print(f"[*] Resolved Prowess trigger for {card_id}.")
+        
+        broadcast_game_state_update()
+        return False
 
     # ==========================================
     # 1. ACTIVATED ABILITIES & PERMANENT EFFECTS
@@ -397,7 +473,9 @@ def resolve_top_of_stack():
                     if targets[0] in perms:
                         del perms[targets[0]]
                         game_state["graveyard"][p].append(targets[0])
+                        evaluate_triggers("DIES", {"card_id": targets[0], "player": p}) # Hook 4: Dies integration
                         break
+# ... (The rest of your resolve_top_of_stack function remains identical)
 
         elif base_id == "merfolk_looter":
             if game_state["library"][caster]:
@@ -606,7 +684,7 @@ def resolve_top_of_stack():
     return False
 
 def resolve_combat():
-    """Resolves declared attackers against blockers and processes combat damage."""
+    """Resolves declared attackers against blockers, processes combat damage, and fires triggers."""
     active_p = game_state["active_player"]
     defending_p = [p for p in game_state["players"] if p != active_p][0]
 
@@ -634,7 +712,10 @@ def resolve_combat():
         att_tough = base_t + att_obj["buffs"]["toughness"]
 
         if att_id not in blocked_map:
+            # --- HOOK 4: COMBAT DAMAGE TO PLAYER ---
             game_state["life_totals"][defending_p] -= att_power
+            if att_power > 0:
+                evaluate_triggers("DAMAGE", {"source": att_id, "target": defending_p, "amount": att_power})
         else:
             for blk_id in blocked_map[att_id]:
                 if blk_id not in game_state["battlefield"][defending_p]:
@@ -651,16 +732,20 @@ def resolve_combat():
                 blk_power = blk_bp + blk_obj["buffs"]["power"]
                 blk_tough = blk_bt + blk_obj["buffs"]["toughness"]
 
+                # --- HOOK 4: COMBAT DAMAGE TO CREATURES & DIES TRIGGERS ---
                 if att_power >= blk_tough:
                     del game_state["battlefield"][defending_p][blk_id]
                     game_state["graveyard"][defending_p].append(blk_id)
+                    evaluate_triggers("DIES", {"card_id": blk_id, "player": defending_p})
 
                 if blk_power >= att_tough:
                     del game_state["battlefield"][active_p][att_id]
                     game_state["graveyard"][active_p].append(att_id)
+                    evaluate_triggers("DIES", {"card_id": att_id, "player": active_p})
 
     game_state["combat"] = {"attackers": [], "blockers": []}
     game_state["phase"] = "POSTCOMBAT_MAIN"
+    print(f"[*] Combat resolved. Phase changed to POSTCOMBAT_MAIN")
     broadcast_game_state_update()
 
     for p, life in game_state["life_totals"].items():
@@ -690,43 +775,69 @@ def pass_priority():
             return
 
         current_phase = game_state["phase"]
+        
+        # 1. Exiting Precombat Main -> Entering Combat
         if current_phase == "PRECOMBAT_MAIN":
             game_state["phase"] = "COMBAT_BEGIN"
+            print("[*] Phase changed to COMBAT_BEGIN")
             broadcast_game_state_update()
             grant_priority(game_state["active_player"])
             return
-
+            
+        # (Your COMBAT_BEGIN and COMBAT_ATTACKERS blocks go here...)
         elif current_phase == "COMBAT_BEGIN":
             game_state["phase"] = "COMBAT_ATTACKERS"
+            print("[*] Phase changed to COMBAT_ATTACKERS")
             broadcast_game_state_update()
             grant_priority(game_state["active_player"])
             return
 
         elif current_phase == "COMBAT_ATTACKERS":
             game_state["phase"] = "POSTCOMBAT_MAIN"
+            print("[*] Phase changed to POSTCOMBAT_MAIN")
             broadcast_game_state_update()
             grant_priority(game_state["active_player"])
             return
-            
+
+        # 2. Exiting Postcombat Main -> Starting a New Turn!
         elif current_phase == "POSTCOMBAT_MAIN":
-            current_active_idx = players.index(game_state["active_player"])
-            next_active_idx = (current_active_idx + 1) % len(players)
-            new_active_player = players[next_active_idx]
+            # Determine the next player
+            current_active_idx = game_state["players"].index(game_state["active_player"])
+            next_active_idx = (current_active_idx + 1) % len(game_state["players"])
+            new_active_player = game_state["players"][next_active_idx]
             
+            # Roll over the turn variables
             game_state["turn"] += 1
             game_state["lands_played_this_turn"] = 0
             game_state["active_player"] = new_active_player
             game_state["phase"] = "PRECOMBAT_MAIN"
             
+            print(f"\n[*] === TURN {game_state['turn']} | Active Player: {new_active_player} ===")
+            print("[*] Phase changed to PRECOMBAT_MAIN")
+            
+            # ==========================================
+            # START OF TURN LOGIC (Untap, Upkeep, Draw)
+            # ==========================================
+            evaluate_triggers("PHASE_BEGIN", {"phase": "PRECOMBAT_MAIN", "player": new_active_player})
+            
+            # Untap Step
             for card_id, obj in game_state["battlefield"].get(new_active_player, {}).items():
                 obj["tapped"] = False
                 obj["summoning_sick"] = False
                 obj["buffs"] = {"power": 0, "toughness": 0}
 
+            # Draw Step
             if len(game_state["library"][new_active_player]) > 0:
                 drawn = game_state["library"][new_active_player].pop(0)
                 game_state["hand"][new_active_player].append(drawn)
-                
+                print(f"[*] Player {new_active_player} drew a card.")
+                evaluate_triggers("DRAW", {"player": new_active_player, "card_id": drawn})
+            else:
+                # Mill condition: Player loses if they try to draw from an empty library
+                winner = [p for p in game_state["players"] if p != new_active_player][0]
+                broadcast_game_over(winner, f"Player {new_active_player} attempted to draw from an empty library.")
+                return
+
             broadcast_game_state_update()
             grant_priority(new_active_player)
             return
@@ -841,6 +952,7 @@ def dispatch_pdu(sock, player_id, pdu):
         if all_kept and len(game_state["mulligans"]) == 2:
             first_player = game_state["players"][0]
             game_state["phase"] = "PRECOMBAT_MAIN"
+            print(f"[*] Both players kept hands. Phase changed to PRECOMBAT_MAIN. Player '{first_player}' begins Turn 1.")
             broadcast_game_state_update()
             grant_priority(first_player)
         else:
@@ -880,7 +992,9 @@ def dispatch_pdu(sock, player_id, pdu):
             "auras": []
         }
         game_state["lands_played_this_turn"] += 1
+        evaluate_triggers("ETB", {"player": player_id, "card_id": card_id, "card_type": "Land"})
         game_state["last_action"] = f"Player '{player_id}' played land: {card_id}"
+        print(f"[*] 🌍 {game_state['last_action']}")
 
         broadcast_game_state_update()
         grant_priority(player_id)
@@ -940,9 +1054,10 @@ def dispatch_pdu(sock, player_id, pdu):
             "caster": player_id,
             "targets": targets
         })
-
+        evaluate_triggers("CAST", {"caster": player_id, "card_id": card_id, "spell_type": card_type})
         target_str = f" targeting [{', '.join(targets)}]" if targets else ""
         game_state["last_action"] = f"Player '{player_id}' cast spell: {card_id}{target_str}"
+        print(f"[*] ⚡ {game_state['last_action']}")
 
         passed_in_succession = 0
         broadcast_game_state_update()
@@ -1035,12 +1150,14 @@ def dispatch_pdu(sock, player_id, pdu):
         
         if len(attackers) > 0:
             game_state["phase"] = "COMBAT_BLOCKERS"
+            print(f"[*] Phase changed to COMBAT_BLOCKERS")
             defending_player = [p for p in game_state["players"] if p != player_id][0]
             passed_in_succession = 0
             broadcast_game_state_update()
             grant_priority(defending_player)
         else:
             game_state["phase"] = "POSTCOMBAT_MAIN"
+            print(f"[*] Phase changed to POSTCOMBAT_MAIN")
             passed_in_succession = 0
             broadcast_game_state_update()
             grant_priority(player_id)

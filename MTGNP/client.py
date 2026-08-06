@@ -164,11 +164,21 @@ class MTGNPClient:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.current_priority_seq = None
         self.running = True
+        
+        # Keep-Alive State
+        self.last_pong_timestamp = time.time()
+        self.keep_alive_active = True
 
     def connect(self):
         self.sock.connect((HOST, PORT))
         print(f"[*] Connected to MTGNP server as {self.player_id}")
+        
+        # Reset timestamp right on connect
+        self.last_pong_timestamp = time.time()
+        
+        # Start background threads
         threading.Thread(target=self.receive_loop, daemon=True).start()
+        threading.Thread(target=self.keep_alive_task, daemon=True).start()
         
         self.send_pdu({
             "type": "PLAYER_READY",
@@ -176,13 +186,46 @@ class MTGNPClient:
             "player_id": self.player_id,
             "deck_list": self.deck_list
         })
+        
+    def keep_alive_task(self):
+        """
+        Sends a PING every 30 seconds. Disconnects if no PONG is received 
+        within 10 seconds of sending the PING.
+        """
+        while self.running and self.keep_alive_active:
+            time.sleep(30)
+            
+            if not self.running or not self.keep_alive_active:
+                break
+                
+            # Send PING
+            ping_pdu = {
+                "type": "PING",
+                "timestamp": int(time.time())
+            }
+            self.send_pdu(ping_pdu)
+            
+            # Wait 10 seconds for the timeout window
+            time.sleep(10)
+            
+            # Check if a PONG was received in the expected window
+            if time.time() - self.last_pong_timestamp >= 40:
+                print("\n[!] Server timeout. No PONG received within 10 seconds. Disconnecting...")
+                self.keep_alive_active = False
+                self.running = False
+                try:
+                    self.sock.close()
+                except:
+                    pass
+                break
 
     def send_pdu(self, pdu):
         try:
             data = json.dumps(pdu) + "\n"
             self.sock.sendall(data.encode('utf-8'))
         except Exception as e:
-            print(f"[Error] Send failed: {e}")
+            if self.running:
+                print(f"[Error] Send failed: {e}")
 
     def receive_loop(self):
         buffer = ""
@@ -191,6 +234,7 @@ class MTGNPClient:
                 data = self.sock.recv(4096)
                 if not data:
                     print("[*] Connection closed by server.")
+                    self.running = False
                     break
                 buffer += data.decode('utf-8')
 
@@ -199,14 +243,21 @@ class MTGNPClient:
                     if line.strip():
                         self.handle_pdu(json.loads(line))
             except Exception as e:
-                print(f"[Error] Receive loop exception: {e}")
+                if self.running:
+                    print(f"[Error] Receive loop exception: {e}")
                 break
 
     def handle_pdu(self, pdu):
         pdu_type = pdu.get("type")
 
+        # Handle incoming PING from the server
         if pdu_type == "PING":
             self.send_pdu({"type": "PONG", "seq_num": pdu.get("seq_num"), "timestamp": pdu.get("timestamp")})
+            return
+            
+        # Handle incoming PONG from the server
+        if pdu_type == "PONG":
+            self.last_pong_timestamp = time.time()
             return
 
         if pdu_type == "PRIORITY_GRANT":
