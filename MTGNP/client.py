@@ -9,6 +9,24 @@ import os
 HOST = "127.0.0.1"
 PORT = 8080
 
+server_ip = input("Enter Server IP Address (or press Enter for localhost): ").strip()
+if not server_ip:
+    server_ip = "127.0.0.1"
+
+port_input = input(f"Enter Port (press Enter for default {PORT}): ").strip()
+port = int(port_input) if port_input.isdigit() else PORT
+
+client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+# --- STEP 2: ATTEMPT CONNECTION ---
+try:
+    print(f"Attempting to connect to {server_ip}:{port}...")
+    client_socket.connect((server_ip, port))
+    print("Successfully connected!")
+except Exception as e:
+    print(f"Connection failed: {e}")
+    exit()
+
 def load_official_instances(instance_file="mtgnp_master_card_list - Card Instances.csv"):
     """Loads all available unique card_id instances grouped by base card name."""
     available_instances = {}
