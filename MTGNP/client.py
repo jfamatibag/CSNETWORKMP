@@ -6,12 +6,12 @@ import time
 import csv
 import os
 
-HOST = "127.0.0.1"
-PORT = 8080
-
 server_ip = input("Enter Server IP Address (or press Enter for localhost): ").strip()
 if not server_ip:
     server_ip = "127.0.0.1"
+
+HOST = server_ip
+PORT = 8080
 
 port_input = input(f"Enter Port (press Enter for default {PORT}): ").strip()
 port = int(port_input) if port_input.isdigit() else PORT
