@@ -1,3 +1,4 @@
+# server.py
 import asyncio
 import struct
 import json
@@ -7,34 +8,24 @@ class MTGNPServer:
     def __init__(self, host='0.0.0.0', port=4444):
         self.host = host
         self.port = port
-        self.clients = {}  # Maps StreamWriter connection -> player_id
+        self.clients = {}  # StreamWriter -> player_id
         self.engine = GameLogic()
 
     async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         client_addr = writer.get_extra_info('peername')
         print(f"Client connected: {client_addr}")
         
-        # MTGNP allows a maximum of 2 connected players
         if len(self.clients) >= 2:
-            print(f"Server full. Rejecting connection from {client_addr}.")
             writer.close()
-            try:
-                await writer.wait_closed()
-            except Exception:
-                pass
             return
             
-        # Assign temporary client ID until PLAYER_READY provides player_id
         temp_id = f"client_{len(self.clients) + 1}"
         self.clients[writer] = temp_id
 
         try:
             while True:
-                # Read 4-byte big-endian unsigned integer length prefix[cite: 2]
                 length_prefix = await reader.readexactly(4)
                 msg_length = struct.unpack('>I', length_prefix)[0]
-                
-                # Read payload bytes based on length header
                 payload_bytes = await reader.readexactly(msg_length)
                 
                 try:
@@ -44,29 +35,39 @@ class MTGNPServer:
                     await self.send_error(writer, "INVALID_JSON", "Could not parse JSON payload.")
                     
         except (asyncio.IncompleteReadError, ConnectionResetError, ConnectionAbortedError, OSError):
-            print(f"Client {client_addr} ({self.clients.get(writer, 'unknown')}) disconnected.")
+            dropped_id = self.clients.get(writer, 'unknown')
+            print(f"Client {client_addr} ({dropped_id}) disconnected unexpectedly.")
+            # Gracefully handle the disconnect state loop
+            await self.handle_unexpected_disconnect(dropped_id)
         finally:
-            print(f"Closing connection for {client_addr}")
             if writer in self.clients:
                 del self.clients[writer]
             writer.close()
-            try:
-                await writer.wait_closed()
-            except Exception:
-                pass
+
+    async def handle_unexpected_disconnect(self, player_id: str):
+        # Broadcast GAME_OVER to the remaining client
+        survivor_id = next((cid for cid in self.clients.values() if cid != player_id and not cid.startswith("client_")), None)
+        if survivor_id:
+            game_over_pdu = {
+                "type": "GAME_OVER",
+                "seq_num": self.engine.next_seq(),
+                "winner_id": survivor_id,
+                "loser_id": player_id,
+                "reason": "DISCONNECT"
+            }
+            # Deliver to the connected survivor node
+            for w, cid in list(self.clients.items()):
+                if cid == survivor_id:
+                    await self.send_message(w, game_over_pdu)
 
     async def process_client_message(self, writer: asyncio.StreamWriter, pdu: dict):
         client_id = self.clients[writer]
-        
-        # Dynamically map socket connection to player_id sent in PLAYER_READY
         if pdu.get("type") == "PLAYER_READY" and "player_id" in pdu:
             client_id = pdu["player_id"]
             self.clients[writer] = client_id
 
-        # Route PDU to the engine
         outbound_messages = self.engine.process_pdu(client_id, pdu)
         
-        # Send resulting messages to intended recipient(s)
         for target, msg in outbound_messages:
             if target == "ALL":
                 for w in list(self.clients.keys()):
@@ -79,7 +80,6 @@ class MTGNPServer:
                     await self.send_message(writer, msg)
 
     async def send_message(self, writer: asyncio.StreamWriter, message: dict):
-        """Frames and sends an MTGNP message over TCP[cite: 2]."""
         try:
             payload = json.dumps(message).encode('utf-8')
             length_prefix = struct.pack('>I', len(payload))
@@ -99,9 +99,6 @@ class MTGNPServer:
 
     async def start(self):
         server = await asyncio.start_server(self.handle_client, self.host, self.port)
-        addr = server.sockets[0].getsockname()
-        print(f"MTGNP Server listening on {addr}")
-
         async with server:
             await server.serve_forever()
 
