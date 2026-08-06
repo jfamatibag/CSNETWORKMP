@@ -1,0 +1,11 @@
+HOW TO RUN SERVER
+python server.py
+
+HOW TO RUN CLIENT
+python client.py <playername> <deck>.csv
+
+- deck can be omitted, but it will default to a default deck
+i.e. python client.py <playername>
+
+SAMPLE FOR CLIENT 
+python client.py p67 deck2.csv
