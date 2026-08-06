@@ -55,7 +55,6 @@ def prompt_cards_for_bottom(hand: list, mulligan_count: int) -> list:
 def connect_to_mtgnp(player_id, host='127.0.0.1', port=4444):
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
-    # Safely attempt socket connection (Line 57 fix)
     try:
         print(f"Connecting to MTGNP server at {host}:{port} as '{player_id}'...")
         client_socket.connect((host, int(port)))
@@ -74,8 +73,11 @@ def connect_to_mtgnp(player_id, host='127.0.0.1', port=4444):
 
     deck = load_deck_from_csv(deck_size=20)
 
+    # PLAYER_READY uses its own separate incremental tracker starting at 1
+    ready_seq = 1
     ready_pdu = {
         "type": "PLAYER_READY",
+        "seq_num": ready_seq,
         "player_id": player_id,
         "deck_list": deck
     }
@@ -86,6 +88,7 @@ def connect_to_mtgnp(player_id, host='127.0.0.1', port=4444):
     print(f"Sent PLAYER_READY PDU with {len(deck)} cards from CSV.")
 
     kept_hand = False
+    current_seq_num = 0  # Tracker for echoing current server seq_num
 
     try:
         while True:
@@ -103,13 +106,24 @@ def connect_to_mtgnp(player_id, host='127.0.0.1', port=4444):
                 data.extend(packet)
                 
             pdu_response = json.loads(data.decode('utf-8'))
-            print("\nReceived update:")
-            print(json.dumps(pdu_response, indent=2))
+            pdu_type = pdu_response.get("type")
 
+            # Continuously cache sequence updates sent down by the server authoritative node
+            if "seq_num" in pdu_response:
+                current_seq_num = pdu_response["seq_num"]
+
+            # --- ROUTE 1: Handle LOBBY/MULLIGAN phase updates ---
             state = pdu_response.get("state", {})
-            phase = state.get("phase")
+            phase = state.get("phase") if state else None
 
-            # Interactive London Mulligan Logic
+            if pdu_type == "PHASE_TRANSITION":
+                print(f"\n📢 PHASE CHANGE: {pdu_response.get('from_phase')} ➔ {pdu_response.get('to_phase')} (Turn {pdu_response.get('turn')})")
+                continue
+
+            if pdu_type == "ERROR":
+                print(f"\n❌ [SERVER ERROR] Code: {pdu_response.get('code')} | Message: {pdu_response.get('message')}")
+                continue
+
             if phase == "MULLIGAN" and not kept_hand:
                 current_hand = state.get("hand", [])
                 mulligan_count = state.get("mulligan_count", 0)
@@ -134,6 +148,7 @@ def connect_to_mtgnp(player_id, host='127.0.0.1', port=4444):
 
                 choice_pdu = {
                     "type": "MULLIGAN_CHOICE",
+                    "seq_num": current_seq_num,
                     "keep": is_keep,
                     "cards_to_bottom": bottom_cards
                 }
@@ -141,16 +156,77 @@ def connect_to_mtgnp(player_id, host='127.0.0.1', port=4444):
                 payload = json.dumps(choice_pdu).encode('utf-8')
                 prefix = struct.pack('>I', len(payload))
                 client_socket.sendall(prefix + payload)
+                continue
 
-                if is_keep:
-                    print(f"Hand kept. Remaining hand size will be {7 - mulligan_count}. Waiting for opponent...")
+            # --- ROUTE 2: Handle Authoritative In-Game State Changes ---
+            if pdu_type == "GAME_STATE_UPDATE" and phase != "LOBBY" and phase != "MULLIGAN":
+                print(f"\n==================================================")
+                print(f">>> TURN {state.get('turn')} | Phase: {phase} <<<")
+                print(f"Active Player: {state.get('active_player')} | Priority Holder: {state.get('priority_holder')}")
+                print(f"Your Life Total: {state.get('life_totals', {}).get(player_id)} | Opponent Life: {next((v for k,v in state.get('life_totals',{}).items() if k != player_id), 20)}")
+                print(f"==================================================")
+                print("Your Current Hand:")
+                cached_hand = state.get("hand", [])
+                for idx, card in enumerate(cached_hand, 1):
+                    print(f"  [{idx}] {card}")
+                continue
+
+            # --- ROUTE 3: Traps and unlocks the PRIORITY_GRANT block completely (Section 10.2.5) ---
+            if pdu_type == "PRIORITY_GRANT":
+                grantee = pdu_response.get("player_id")
+                
+                if grantee == player_id:
+                    print(f"\n⭐ YOU HAVE PRIORITY! (Current Action Token Seq: {current_seq_num})")
+                    print("Choose an Action:")
+                    print("  [p] Pass Priority")
+                    print("  [l] Play a Land Permanent")
+                    print("  [c] Cast a Spell from Hand")
+                    
+                    cmd = input("\nEnter selection (p/l/c): ").strip().lower()
+                    action_pdu = None
+
+                    if cmd == 'p':
+                        action_pdu = {
+                            "type": "PRIORITY_PASS",
+                            "seq_num": current_seq_num
+                        }
+                        print("Passing priority to opponent...")
+                        
+                    elif cmd == 'l':
+                        cid = input("Enter exact Land instance ID from hand (e.g. swamp): ").strip()
+                        action_pdu = {
+                            "type": "PLAY_LAND",
+                            "seq_num": current_seq_num,
+                            "card_id": cid
+                        }
+                        print(f"Attempting to deploy land permanent: {cid}...")
+                        
+                    elif cmd == 'c':
+                        cid = input("Enter exact Card instance ID to cast (e.g. shock): ").strip()
+                        tgt = input("Enter target player ID (e.g. player_1) or press Enter for no target: ").strip()
+                        color_key = input("Enter mana color shorthand required (W/U/B/R/G): ").strip().upper()
+                        
+                        action_pdu = {
+                            "type": "CAST_SPELL",
+                            "seq_num": current_seq_num,
+                            "card_id": cid,
+                            "targets": [tgt] if tgt else [],
+                            "mana_payment": {color_key: 1} if color_key else {}
+                        }
+                        print(f"Casting spell {cid} targeting {tgt if tgt else 'none'}...")
+                    else:
+                        print("Invalid entry selection. Re-triggering choices.")
+                        continue
+
+                    if action_pdu:
+                        payload = json.dumps(action_pdu).encode('utf-8')
+                        prefix = struct.pack('>I', len(payload))
+                        client_socket.sendall(prefix + payload)
                 else:
-                    print("Mulligan requested. Drawing 7 new cards...")
+                    print(f"⏳ Waiting for priority holder ({grantee}) to complete action...")
 
-            elif phase == "IN_GAME":
-                active_player = state.get("active_player")
-                turn = state.get("turn")
-                print(f"\n>>> GAME STARTED! Turn {turn} - Active Player: {active_player} <<<")
+
+
 
     except KeyboardInterrupt:
         print("Disconnecting client.")
