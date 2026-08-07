@@ -7,9 +7,16 @@ import random
 import csv
 import os
 import re
+import argparse
 
 HOST = "0.0.0.0"
 PORT = 8080
+VERBOSE = False  # Global verbose toggle
+
+def vprint(message):
+    """Prints debug/game flow messages only if VERBOSE is enabled."""
+    if VERBOSE:
+        print(message)
 
 # --- Protocol Error Codes ---
 ERR_INVALID_JSON = "INVALID_JSON"
@@ -131,7 +138,7 @@ def load_card_databases():
                 VALID_INSTANCES.add(inst_id)
                 INSTANCE_TO_BASE[inst_id] = base_id
 
-    print(f"[*] Strict CSV Validation Active: Loaded {len(MASTER_CARD_DB)} master cards and {len(VALID_INSTANCES)} legal instances.")
+    vprint(f"[*] Strict CSV Validation Active: Loaded {len(MASTER_CARD_DB)} master cards and {len(VALID_INSTANCES)} legal instances.")
 
 # --- Server State ---
 clients = {}
@@ -502,13 +509,13 @@ def evaluate_triggers(event_type, event_data):
                     
                     # Pause standard priority and prompt the player
                     prompt_trigger_choice(player_id, temp_trigger_id, valid_targets=["opponent_1", "creature_1"])
-                    print(f"[*] ⏸️ Pausing to ask {player_id} for trigger targets.")
+                    vprint(f"[*] ⏸️ Pausing to ask {player_id} for trigger targets.")
                 else:
                     # Normal automated trigger (like Prowess)
                     game_state["stack"].append(trigger_obj)
                     broadcast_stack_push(trigger_obj)
                     triggers_fired += 1
-                    print(f"[*] ⚡ Trigger added to stack: {trigger_obj['trigger_type']} from {perm_id}")
+                    vprint(f"[*] ⚡ Trigger added to stack: {trigger_obj['trigger_type']} from {perm_id}")
 
     # 2. Process collected triggers per player
     for player_id, trigs in collected_triggers.items():
@@ -517,7 +524,7 @@ def evaluate_triggers(event_type, event_data):
             single_trigger = trigs[0]
             game_state["stack"].append(single_trigger)
             broadcast_stack_push(single_trigger)
-            print(f"[*] ⚡ Trigger added to stack: {single_trigger['trigger_type']} from {single_trigger['card_id']}")
+            vprint(f"[*] ⚡ Trigger added to stack: {single_trigger['trigger_type']} from {single_trigger['card_id']}")
         
         elif len(trigs) > 1:
             # Multiple triggers fired! We must pause and ask the player to order them.
@@ -539,7 +546,7 @@ def evaluate_triggers(event_type, event_data):
             
             # Fire the prompt out to the specific client
             prompt_trigger_order(player_id, trigger_data_for_prompt)
-            print(f"[*] ⏸️ Pausing to ask {player_id} to order {len(trigs)} simultaneous triggers.")
+            vprint(f"[*] ⏸️ Pausing to ask {player_id} to order {len(trigs)} simultaneous triggers.")
 
     return triggers_fired > 0
 
@@ -571,7 +578,7 @@ def resolve_top_of_stack():
             if card_id in game_state["battlefield"].get(caster, {}):
                 game_state["battlefield"][caster][card_id]["buffs"]["power"] += 1
                 game_state["battlefield"][caster][card_id]["buffs"]["toughness"] += 1
-                print(f"[*] Resolved Prowess trigger for {card_id}.")
+                vprint(f"[*] Resolved Prowess trigger for {card_id}.")
         
         broadcast_game_state_update()
         return False
@@ -670,7 +677,7 @@ def resolve_top_of_stack():
                     game_state["stack"].remove(target_item)
                     target_caster = target_item["caster"]
                     game_state["graveyard"][target_caster].append(target_card_id)
-                    print(f"[*] Countered '{target_card_id}'!")
+                    vprint(f"[*] Countered '{target_card_id}'!")
 
         # --- DIRECT DAMAGE ---
         elif base_id in ["lightning_bolt", "shock", "lava_spike", "flame_slash", "searing_spear", "incinerate", "skullcrack", "rift_bolt"]:
@@ -871,7 +878,7 @@ def resolve_combat():
 
     game_state["combat"] = {"attackers": [], "blockers": []}
     game_state["phase"] = "POSTCOMBAT_MAIN"
-    print(f"[*] Combat resolved. Phase changed to POSTCOMBAT_MAIN")
+    vprint(f"[*] Combat resolved. Phase changed to POSTCOMBAT_MAIN")
     broadcast_game_state_update()
 
     for p, life in game_state["life_totals"].items():
@@ -905,7 +912,7 @@ def pass_priority():
         # 1. Exiting Precombat Main -> Entering Combat
         if current_phase == "PRECOMBAT_MAIN":
             game_state["phase"] = "COMBAT_BEGIN"
-            print("[*] Phase changed to COMBAT_BEGIN")
+            vprint("[*] Phase changed to COMBAT_BEGIN")
             broadcast_phase_transition("COMBAT_BEGIN", game_state["active_player"])
             broadcast_game_state_update()
             grant_priority(game_state["active_player"])
@@ -913,7 +920,7 @@ def pass_priority():
             
         elif current_phase == "COMBAT_BEGIN":
             game_state["phase"] = "COMBAT_ATTACKERS"
-            print("[*] Phase changed to COMBAT_ATTACKERS")
+            vprint("[*] Phase changed to COMBAT_ATTACKERS")
             broadcast_phase_transition("COMBAT_ATTACKERS", game_state["active_player"])
             broadcast_game_state_update()
             grant_priority(game_state["active_player"])
@@ -921,7 +928,7 @@ def pass_priority():
 
         elif current_phase == "COMBAT_ATTACKERS":
             game_state["phase"] = "POSTCOMBAT_MAIN"
-            print("[*] Phase changed to POSTCOMBAT_MAIN")
+            vprint("[*] Phase changed to POSTCOMBAT_MAIN")
             broadcast_phase_transition("POSTCOMBAT_MAIN", game_state["active_player"])
             broadcast_game_state_update()
             grant_priority(game_state["active_player"])
@@ -934,7 +941,7 @@ def pass_priority():
             # --- NEW: Check for Hand Size ---
             if len(game_state["hand"][active_p]) > 7:
                 game_state["phase"] = "CLEANUP"
-                print(f"[*] Phase changed to CLEANUP. Waiting for {active_p} to discard.")
+                vprint(f"[*] Phase changed to CLEANUP. Waiting for {active_p} to discard.")
                 broadcast_phase_transition("CLEANUP", active_p)
                 broadcast_game_state_update()
                 # Grant priority back to the active player so they can send the DISCARD action
@@ -950,8 +957,8 @@ def pass_priority():
                 game_state["active_player"] = new_active_player
                 game_state["phase"] = "PRECOMBAT_MAIN"
                 
-                print(f"\n[*] === TURN {game_state['turn']} | Active Player: {new_active_player} ===")
-                print("[*] Phase changed to PRECOMBAT_MAIN")
+                vprint(f"\n[*] === TURN {game_state['turn']} | Active Player: {new_active_player} ===")
+                vprint("[*] Phase changed to PRECOMBAT_MAIN")
                 
                 # Broadcast the start of the new turn
                 broadcast_phase_transition("PRECOMBAT_MAIN", new_active_player)
@@ -968,7 +975,7 @@ def pass_priority():
                 if len(game_state["library"][new_active_player]) > 0:
                     drawn = game_state["library"][new_active_player].pop(0)
                     game_state["hand"][new_active_player].append(drawn)
-                    print(f"[*] Player {new_active_player} drew a card.")
+                    vprint(f"[*] Player {new_active_player} drew a card.")
                     evaluate_triggers("DRAW", {"player": new_active_player, "card_id": drawn})
                 else:
                     winner = [p for p in game_state["players"] if p != new_active_player][0]
@@ -1034,14 +1041,14 @@ def dispatch_pdu(sock, player_id, pdu):
             draw_count = min(7, len(game_state["library"][player_id]))
             game_state["hand"][player_id] = [game_state["library"][player_id].pop(0) for _ in range(draw_count)]
             
-            print(f"[*] Player '{player_id}' sent PLAYER_READY. Total ready: {len(game_state['players'])}/2")
+            vprint(f"[*] Player '{player_id}' sent PLAYER_READY. Total ready: {len(game_state['players'])}/2")
 
         if len(game_state["players"]) == 2:
             first_player = random.choice(game_state["players"])
             game_state["active_player"] = first_player
             game_state["phase"] = "MULLIGAN"
             game_state["mulligans"] = {p: {"kept": False, "count": 0} for p in game_state["players"]}
-            print("[*] Both players connected and ready! Game state updated to MULLIGAN phase.")
+            vprint("[*] Both players connected and ready! Game state updated to MULLIGAN phase.")
             broadcast_game_state_update()
         return
 
@@ -1089,7 +1096,7 @@ def dispatch_pdu(sock, player_id, pdu):
         if all_kept and len(game_state["mulligans"]) == 2:
             first_player = game_state["players"][0]
             game_state["phase"] = "PRECOMBAT_MAIN"
-            print(f"[*] Both players kept hands. Phase changed to PRECOMBAT_MAIN. Player '{first_player}' begins Turn 1.")
+            vprint(f"[*] Both players kept hands. Phase changed to PRECOMBAT_MAIN. Player '{first_player}' begins Turn 1.")
             broadcast_game_state_update()
             grant_priority(first_player)
         else:
@@ -1131,7 +1138,7 @@ def dispatch_pdu(sock, player_id, pdu):
         game_state["lands_played_this_turn"] += 1
         evaluate_triggers("ETB", {"player": player_id, "card_id": card_id, "card_type": "Land"})
         game_state["last_action"] = f"Player '{player_id}' played land: {card_id}"
-        print(f"[*] 🌍 {game_state['last_action']}")
+        vprint(f"[*] 🌍 {game_state['last_action']}")
 
         broadcast_game_state_update()
         grant_priority(player_id)
@@ -1196,7 +1203,7 @@ def dispatch_pdu(sock, player_id, pdu):
         evaluate_triggers("CAST", {"caster": player_id, "card_id": card_id, "spell_type": card_type})
         target_str = f" targeting [{', '.join(targets)}]" if targets else ""
         game_state["last_action"] = f"Player '{player_id}' cast spell: {card_id}{target_str}"
-        print(f"[*] ⚡ {game_state['last_action']}")
+        vprint(f"[*] ⚡ {game_state['last_action']}")
 
         passed_in_succession = 0
         broadcast_game_state_update()
@@ -1277,7 +1284,7 @@ def dispatch_pdu(sock, player_id, pdu):
             game_state["graveyard"][player_id].append(cid)
             
         game_state["last_action"] = f"Player '{player_id}' discarded {len(cards_to_discard)} card(s) to maximum hand size."
-        print(f"[*] 🗑️ {game_state['last_action']}")
+        vprint(f"[*] 🗑️ {game_state['last_action']}")
         
         # After discarding, officially pass the turn to the next player
         # (This triggers the same logic that used to sit at the end of POSTCOMBAT_MAIN)
@@ -1290,7 +1297,7 @@ def dispatch_pdu(sock, player_id, pdu):
         game_state["active_player"] = new_active_player
         game_state["phase"] = "PRECOMBAT_MAIN"
         
-        print(f"\n[*] === TURN {game_state['turn']} | Active Player: {new_active_player} ===")
+        vprint(f"\n[*] === TURN {game_state['turn']} | Active Player: {new_active_player} ===")
         broadcast_phase_transition("PRECOMBAT_MAIN", new_active_player)
         
         # Untap & Draw (from your existing pass_priority logic)
@@ -1360,14 +1367,14 @@ def dispatch_pdu(sock, player_id, pdu):
         
         if len(attackers) > 0:
             game_state["phase"] = "COMBAT_BLOCKERS"
-            print(f"[*] Phase changed to COMBAT_BLOCKERS")
+            vprint(f"[*] Phase changed to COMBAT_BLOCKERS")
             defending_player = [p for p in game_state["players"] if p != player_id][0]
             passed_in_succession = 0
             broadcast_game_state_update()
             grant_priority(defending_player)
         else:
             game_state["phase"] = "POSTCOMBAT_MAIN"
-            print(f"[*] Phase changed to POSTCOMBAT_MAIN")
+            vprint(f"[*] Phase changed to POSTCOMBAT_MAIN")
             passed_in_succession = 0
             broadcast_game_state_update()
             grant_priority(player_id)
@@ -1423,7 +1430,7 @@ def dispatch_pdu(sock, player_id, pdu):
         # Store the requested damage sequence in the combat state
         game_state["combat"]["damage_orders"] = orders
         game_state["last_action"] = f"Player '{player_id}' assigned combat damage orders."
-        print(f"[*] ⚔️ {game_state['last_action']}")
+        vprint(f"[*] ⚔️ {game_state['last_action']}")
         
         # Advance directly to the combat resolution calculation
         game_state["phase"] = "COMBAT_DAMAGE"
@@ -1457,7 +1464,7 @@ def dispatch_pdu(sock, player_id, pdu):
             trigger_obj = pending[t_id]
             game_state["stack"].append(trigger_obj)
             broadcast_stack_push(trigger_obj)
-            print(f"[*] ⚡ Trigger added to stack (Ordered): {trigger_obj['trigger_type']}")
+            vprint(f"[*] ⚡ Trigger added to stack (Ordered): {trigger_obj['trigger_type']}")
             
         # Clear the pending queue and resume game flow
         game_state["pending_triggers"][player_id] = {}
@@ -1481,7 +1488,7 @@ def dispatch_pdu(sock, player_id, pdu):
         # Push to stack and resume
         game_state["stack"].append(trigger_obj)
         broadcast_stack_push(trigger_obj)
-        print(f"[*] ⚡ Trigger added to stack with targets {chosen_targets}: {trigger_obj['trigger_type']}")
+        vprint(f"[*] ⚡ Trigger added to stack with targets {chosen_targets}: {trigger_obj['trigger_type']}")
         
         broadcast_game_state_update()
         grant_priority(game_state["active_player"])
@@ -1497,7 +1504,7 @@ def dispatch_pdu(sock, player_id, pdu):
 def handle_client(sock, addr):
     player_id = None
     buffer = ""
-    print(f"[*] New TCP connection accepted from {addr}")
+    vprint(f"[*] New TCP connection accepted from {addr}")
     
     # --- NEW: Set a short 1-second timeout to allow continuous time-checking ---
     sock.settimeout(1.0)
@@ -1551,6 +1558,14 @@ def handle_client(sock, addr):
         sock.close()
 
 def main():
+    global VERBOSE
+    
+    parser = argparse.ArgumentParser(description="Start the MTGNP Game Server.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose debug logging.")
+    args = parser.parse_args()
+    
+    VERBOSE = args.verbose
+    
     load_card_databases()
     reset_game_state()
     
@@ -1558,7 +1573,10 @@ def main():
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind((HOST, PORT))
     server.listen(5)
+    
     print(f"[*] MTGNP Server online on {HOST}:{PORT}")
+    if VERBOSE:
+        print("[*] Verbose logging is enabled.")
 
     while True:
         sock, addr = server.accept()
