@@ -583,11 +583,9 @@ def resolve_top_of_stack():
     targets = item.get("targets", [])
     item_type = item.get("type", "SPELL")
         
-    # --- FIX: Define base_id and card_type before evaluation ---
     base_id = INSTANCE_TO_BASE.get(card_id) or (card_id.rsplit('_', 1)[0].lower() if '_' in card_id else card_id.lower())
     c_data = MASTER_CARD_DB.get(base_id, {})
     card_type = get_card_field(c_data, "Card Type", "Type")
-    # -----------------------------------------------------------
     
     # ==========================================
     # 0. RESOLVE AUTOMATED TRIGGERS
@@ -1064,8 +1062,8 @@ def dispatch_pdu(sock, player_id, pdu):
             vprint(f"[*] Player '{player_id}' sent PLAYER_READY. Total ready: {len(game_state['players'])}/2")
 
         if len(game_state["players"]) == 2:
-            _player = random.choice(game_state["players"])
-            game_state["active_player"] = _player
+            first_player = random.choice(game_state["players"])
+            game_state["active_player"] = first_player
             game_state["phase"] = "MULLIGAN"
             game_state["mulligans"] = {p: {"kept": False, "count": 0} for p in game_state["players"]}
             vprint("[*] Both players connected and ready! Game state updated to MULLIGAN phase.")
@@ -1307,7 +1305,6 @@ def dispatch_pdu(sock, player_id, pdu):
         vprint(f"[*] 🗑️ {game_state['last_action']}")
         
         # After discarding, officially pass the turn to the next player
-        # (This triggers the same logic that used to sit at the end of POSTCOMBAT_MAIN)
         current_active_idx = game_state["players"].index(game_state["active_player"])
         next_active_idx = (current_active_idx + 1) % len(game_state["players"])
         new_active_player = game_state["players"][next_active_idx]
@@ -1526,7 +1523,6 @@ def handle_client(sock, addr):
     buffer = ""
     vprint(f"[*] New TCP connection accepted from {addr}")
     
-    # --- NEW: Set a short 1-second timeout to allow continuous time-checking ---
     sock.settimeout(1.0)
     
     try:
@@ -1555,7 +1551,6 @@ def handle_client(sock, addr):
                     dispatch_pdu(sock, player_id, pdu)
 
             except socket.timeout:
-                # --- NEW: Check the AFK Turn Timer every 1 second ---
                 # Only apply the timer if this player currently holds priority
                 if player_id and priority_holder == player_id:
                     p_time = game_state.get("priority_time")
@@ -1588,7 +1583,9 @@ def main():
     
     load_card_databases()
     reset_game_state()
-    
+
+    threading.Thread(target=admin_console, daemon=True).start()
+
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind((HOST, PORT))
