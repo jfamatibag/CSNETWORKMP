@@ -18,6 +18,26 @@ def vprint(message):
     if VERBOSE:
         print(message)
 
+def admin_console():
+    """Background thread to listen for server console commands."""
+    global VERBOSE
+    while True:
+        try:
+            # Wait for the server admin to type something and press Enter
+            command = input().strip().lower()
+            
+            if command in ["v", "verbose"]:
+                VERBOSE = not VERBOSE
+                state = "ENABLED" if VERBOSE else "DISABLED"
+                print(f"[*] Server Admin: Verbose mode is now {state}.")
+            elif command in ["help", "?"]:
+                print("[*] Available console commands: 'v' or 'verbose' to toggle logging.")
+                
+        except EOFError:
+            break
+        except Exception as e:
+            print(f"[!] Console input error: {e}")
+
 # --- Protocol Error Codes ---
 ERR_INVALID_JSON = "INVALID_JSON"
 ERR_ILLEGAL_DECK = "ILLEGAL_DECK"
