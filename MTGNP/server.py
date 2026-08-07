@@ -586,6 +586,33 @@ def resolve_top_of_stack():
     base_id = INSTANCE_TO_BASE.get(card_id) or (card_id.rsplit('_', 1)[0].lower() if '_' in card_id else card_id.lower())
     c_data = MASTER_CARD_DB.get(base_id, {})
     card_type = get_card_field(c_data, "Card Type", "Type")
+
+    if targets:
+        # Collect all active card instance IDs from all players' battlefields
+        active_bf_ids = set()
+        for p_bf in game_state["battlefield"].values():
+            if isinstance(p_bf, dict):
+                active_bf_ids.update(p_bf.keys())
+
+        # A target is legal if it is still on the battlefield OR if it is a player ID
+        legal_targets = [
+            t_id for t_id in targets 
+            if t_id in active_bf_ids or t_id in game_state.get("players", [])
+        ]
+
+        # If the spell targeted something, but ALL targets are now gone/illegal, it fizzles
+        if not legal_targets:
+            vprint(f"[*] {card_id} fizzled (all targets are no longer valid).")
+            
+            # Put fizzled spell cards into owner's graveyard
+            if item_type == "SPELL" and "card" in item:
+                game_state["graveyards"].setdefault(caster, []).append(item["card"])
+                
+            broadcast_game_state_update()
+            return False
+
+        # Update targets to only include valid targets that survived
+        targets = legal_targets
     
     # ==========================================
     # 0. RESOLVE AUTOMATED TRIGGERS
