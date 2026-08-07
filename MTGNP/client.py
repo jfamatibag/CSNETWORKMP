@@ -11,21 +11,10 @@ if not server_ip:
     server_ip = "127.0.0.1"
 
 HOST = server_ip
-PORT = 8080
+PORT = 4444
 
 port_input = input(f"Enter Port (press Enter for default {PORT}): ").strip()
 port = int(port_input) if port_input.isdigit() else PORT
-
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-# --- STEP 2: ATTEMPT CONNECTION ---
-try:
-    print(f"Attempting to connect to {server_ip}:{port}...")
-    client_socket.connect((server_ip, port))
-    print("Successfully connected!")
-except Exception as e:
-    print(f"Connection failed: {e}")
-    exit()
 
 def load_official_instances(instance_file="mtgnp_master_card_list - Card Instances.csv"):
     """Loads all available unique card_id instances grouped by base card name."""
@@ -128,13 +117,10 @@ def format_battlefield(battlefield_dict):
             continue
             
         for perm_id, details in permanents.items():
-            # Derive base card ID (e.g. 'goblin_guide_002' -> 'goblin_guide')
             base_id = perm_id.rsplit('_', 1)[0].lower() if '_' in perm_id else perm_id.lower()
             card_info = MASTER_CARD_DB.get(base_id, {})
             card_name = card_info.get("Card Name", perm_id)
-            card_type = card_info.get("Card Type", "")
 
-            # Extract P/T stats if creature
             pt_str = ""
             base_p = card_info.get("Power")
             base_t = card_info.get("Toughness")
@@ -154,7 +140,6 @@ def format_battlefield(battlefield_dict):
                 except ValueError:
                     pt_str = f" <{base_p}/{base_t}>"
 
-            # Status flags
             status_flags = []
             if details.get("tapped"):
                 status_flags.append("Tapped")
@@ -168,17 +153,16 @@ def format_battlefield(battlefield_dict):
                 status_flags.append(f"Auras: {', '.join(details['auras'])}")
                 
             status_str = f"[{', '.join(status_flags)}]"
-
-            # Format permanent line with name, P/T, and status flags
             lines.append(f"  - {perm_id} ({card_name}){pt_str} {status_str}")
 
     return "\n".join(lines)
 
 
 class MTGNPClient:
-    def __init__(self, player_id, deck_list):
-        self.player_id = player_id
-        self.deck_list = deck_list
+    def __init__(self, client_id, deck_list=None, is_spectator=False):
+        self.client_id = client_id
+        self.deck_list = deck_list or []
+        self.is_spectator = is_spectator
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.current_priority_seq = None
         self.running = True
@@ -188,45 +172,53 @@ class MTGNPClient:
         self.keep_alive_active = True
 
     def connect(self):
-        self.sock.connect((HOST, PORT))
-        print(f"[*] Connected to MTGNP server as {self.player_id}")
+        try:
+            print(f"Attempting to connect to {HOST}:{PORT}...")
+            self.sock.connect((HOST, PORT))
+            print("Successfully connected!")
+        except Exception as e:
+            print(f"Connection failed: {e}")
+            sys.exit(1)
+
+        if self.is_spectator:
+            print(f"[*] Connected to MTGNP server as Spectator (God Mode): {self.client_id}")
+        else:
+            print(f"[*] Connected to MTGNP server as Player: {self.client_id}")
         
-        # Reset timestamp right on connect
         self.last_pong_timestamp = time.time()
         
         # Start background threads
         threading.Thread(target=self.receive_loop, daemon=True).start()
         threading.Thread(target=self.keep_alive_task, daemon=True).start()
         
-        self.send_pdu({
-            "type": "PLAYER_READY",
-            "seq_num": 1,
-            "player_id": self.player_id,
-            "deck_list": self.deck_list
-        })
+        if self.is_spectator:
+            self.send_pdu({
+                "type": "SPECTATOR_JOIN",
+                "spectator_id": self.client_id
+            })
+        else:
+            self.send_pdu({
+                "type": "PLAYER_READY",
+                "seq_num": 1,
+                "player_id": self.client_id,
+                "deck_list": self.deck_list
+            })
         
     def keep_alive_task(self):
-        """
-        Sends a PING every 30 seconds. Disconnects if no PONG is received 
-        within 10 seconds of sending the PING.
-        """
         while self.running and self.keep_alive_active:
             time.sleep(30)
             
             if not self.running or not self.keep_alive_active:
                 break
                 
-            # Send PING
             ping_pdu = {
                 "type": "PING",
                 "timestamp": int(time.time())
             }
             self.send_pdu(ping_pdu)
             
-            # Wait 10 seconds for the timeout window
             time.sleep(10)
             
-            # Check if a PONG was received in the expected window
             if time.time() - self.last_pong_timestamp >= 40:
                 print("\n[!] Server timeout. No PONG received within 10 seconds. Disconnecting...")
                 self.keep_alive_active = False
@@ -268,18 +260,16 @@ class MTGNPClient:
     def handle_pdu(self, pdu):
         pdu_type = pdu.get("type")
 
-        # Handle incoming PING from the server
         if pdu_type == "PING":
             self.send_pdu({"type": "PONG", "seq_num": pdu.get("seq_num"), "timestamp": pdu.get("timestamp")})
             return
             
-        # Handle incoming PONG from the server
         if pdu_type == "PONG":
             self.last_pong_timestamp = time.time()
             return
 
-        if pdu_type == "PRIORITY_GRANT":
-            if pdu.get("player_id") == self.player_id:
+        if pdu_type == "PRIORITY_GRANT" and not self.is_spectator:
+            if pdu.get("player_id") == self.client_id:
                 self.current_priority_seq = pdu.get("seq_num")
                 print(f"\n[>>> PRIORITY GRANTED <<<] Token seq_num: {self.current_priority_seq}")
                 print("Commands: 'pass', 'land <card_id>', 'cast <card_id> [mana_land_id] [target]', 'attack <creature_id> [target]', 'block <blocker_id> <attacker_id>'")
@@ -287,56 +277,104 @@ class MTGNPClient:
         elif pdu_type == "GAME_STATE_UPDATE":
             state = pdu.get("state", {})
             phase = state.get("phase")
-            print(f"\n--- STATE UPDATE (Turn {state.get('turn')}, Phase: {phase}) ---")
-            print(f"Life: {state.get('life_totals')}")
-            print(f"Your Hand: {state.get('hand', {}).get(self.player_id, [])}")
-            
-            # Print formatted multi-line battlefield representation
-            if "battlefield_text" in state:
-                print(state["battlefield_text"])
-            elif "battlefield" in state:
-                print(format_battlefield(state["battlefield"]))
-                
-            print(f"Stack: {state.get('stack')}")
 
-            if phase == "COMBAT_BLOCKERS":
-                attackers = state.get("combat", {}).get("attackers", [])
-                active_player = state.get("active_player")
+            # --- GOD MODE SPECTATOR UI ---
+            if self.is_spectator:
+                os.system('cls' if os.name == 'nt' else 'clear')
+                print("======================================================================")
+                print(f"👁️ GOD MODE SPECTATOR VIEW | Turn {state.get('turn', 1)}, Phase: {phase}")
+                print(f"Active Player: {state.get('active_player')} | Priority: {state.get('priority_player')}")
+                print("======================================================================")
                 
-                # Only show this alert if we are the defending player
-                if attackers and active_player != self.player_id:
-                    print("\n" + "="*40)
-                    print("🚨 INCOMING ATTACK 🚨")
-                    for att in attackers:
-                        cid = att.get("creature_id")
-                        print(f"[*] {active_player} is attacking you with: {cid}!")
-                    print("="*40 + "\n")
-
-            if phase == "MULLIGAN":
-                mull_info = state.get("mulligans", {}).get(self.player_id, {})
-                mull_count = mull_info.get("count", 0)
-                
-                if not mull_info.get("kept", False) and mull_info.get("status") != "KEPT":                    
-                    print("\n[MULLIGAN PHASE] Commands:")
-                    if mull_count == 0:
-                        print("  - Type 'keep' to keep this hand.")
-                    else:
-                        print(f"  - Type 'bottom <card_id1> ...' (specify {mull_count} card(s) to put on bottom).")
-                    print("  - Type 'mulligan' to draw a new hand.")
+                print("\n--- LIFE TOTALS ---")
+                for p_id, hp in state.get("life_totals", {}).items():
+                    print(f"  {p_id}: {hp} HP")
+                    
+                print("\n--- 👁️ BOTH PLAYERS' HANDS (GOD MODE) ---")
+                hands = state.get("hand", {})
+                if not hands:
+                    print("  (No hand data available)")
                 else:
-                    print("\n[MULLIGAN PHASE] Hand kept! Waiting for opponent...")
+                    for p_id, hand_cards in hands.items():
+                        cards_str = ", ".join(hand_cards) if hand_cards else "(empty hand)"
+                        print(f"  [{p_id}] ({len(hand_cards)} cards): {cards_str}")
+                        
+                print("\n" + (state.get("battlefield_text") or format_battlefield(state.get("battlefield", {}))))
+                
+                print("\n--- STACK ---")
+                stack = state.get("stack", [])
+                if not stack:
+                    print("  (Stack is empty)")
+                else:
+                    for idx, item in enumerate(reversed(stack)):
+                        print(f"  {idx + 1}. {item.get('caster')} -> {item.get('card_id')} ({item.get('type')})")
+                        
+                print("======================================================================\n")
+
+            # --- STANDARD PLAYER UI ---
+            else:
+                print(f"\n--- STATE UPDATE (Turn {state.get('turn')}, Phase: {phase}) ---")
+                print(f"Life: {state.get('life_totals')}")
+                print(f"Your Hand: {state.get('hand', {}).get(self.client_id, [])}")
+                
+                if "battlefield_text" in state:
+                    print(state["battlefield_text"])
+                elif "battlefield" in state:
+                    print(format_battlefield(state["battlefield"]))
+                    
+                print(f"Stack: {state.get('stack')}")
+
+                if phase == "COMBAT_BLOCKERS":
+                    attackers = state.get("combat", {}).get("attackers", [])
+                    active_player = state.get("active_player")
+                    
+                    if attackers and active_player != self.client_id:
+                        print("\n" + "="*40)
+                        print("🚨 INCOMING ATTACK 🚨")
+                        for att in attackers:
+                            cid = att.get("creature_id")
+                            print(f"[*] {active_player} is attacking you with: {cid}!")
+                        print("="*40 + "\n")
+
+                if phase == "MULLIGAN":
+                    mull_info = state.get("mulligans", {}).get(self.client_id, {})
+                    mull_count = mull_info.get("count", 0)
+                    
+                    if not mull_info.get("kept", False) and mull_info.get("status") != "KEPT":                    
+                        print("\n[MULLIGAN PHASE] Commands:")
+                        if mull_count == 0:
+                            print("  - Type 'keep' to keep this hand.")
+                        else:
+                            print(f"  - Type 'bottom <card_id1> ...' (specify {mull_count} card(s) to put on bottom).")
+                        print("  - Type 'mulligan' to draw a new hand.")
+                    else:
+                        print("\n[MULLIGAN PHASE] Hand kept! Waiting for opponent...")
 
         elif pdu_type == "ERROR":
             print(f"\n[SERVER ERROR] Code: {pdu.get('code')} - Message: {pdu.get('message')}")
 
         elif pdu_type == "GAME_OVER":
-            print(f"\n[GAME OVER] Winner: {pdu.get('winner_id')} | Reason: {pdu.get('reason')}")
-            print("\nWould you like to play again? Type 'ready' to restart or 'quit' to exit.")
+            print(f"\n🏆 [GAME OVER] Winner: {pdu.get('winner_id')} | Reason: {pdu.get('reason')}")
+            if not self.is_spectator:
+                print("\nWould you like to play again? Type 'ready' to restart or 'quit' to exit.")
 
         else:
             print(f"\n[RECV PDU] {pdu_type}: {pdu}")
 
     def interactive_loop(self):
+        if self.is_spectator:
+            print("\n[*] Passive Spectator View initialized. Type 'quit' anytime to disconnect.\n")
+            while self.running:
+                try:
+                    cmd = input().strip().lower()
+                    if cmd == "quit":
+                        self.running = False
+                        break
+                except (KeyboardInterrupt, EOFError):
+                    self.running = False
+                    break
+            return
+
         time.sleep(0.5)
         while self.running:
             try:
@@ -345,7 +383,6 @@ class MTGNPClient:
                     continue
                 action = cmd[0].lower()
 
-                # Mulligan Actions
                 if action == "keep":
                     self.send_pdu({
                         "type": "MULLIGAN_CHOICE",
@@ -368,7 +405,6 @@ class MTGNPClient:
                         "cards_to_bottom": []
                     })
 
-                # Gameplay Actions
                 elif action == "pass":
                     if self.current_priority_seq is None: 
                         print("You do not hold priority.")
@@ -387,7 +423,6 @@ class MTGNPClient:
                     mana_payment = []
                     targets = []
                     
-                    # Sort the remaining arguments into lands vs. targets
                     for arg in raw_args:
                         if any(lk in arg.lower() for lk in land_keywords):
                             mana_payment.append(arg)
@@ -423,7 +458,7 @@ class MTGNPClient:
                     })
 
                 elif action == "concede":
-                    self.send_pdu({"type": "CONCEDE", "seq_num": 1, "player_id": self.player_id})
+                    self.send_pdu({"type": "CONCEDE", "seq_num": 1, "player_id": self.client_id})
 
                 elif action == "quit":
                     self.running = False
@@ -432,18 +467,35 @@ class MTGNPClient:
                     self.send_pdu({
                         "type": "PLAYER_READY",
                         "seq_num": 1,
-                        "player_id": self.player_id,
+                        "player_id": self.client_id,
                         "deck_list": self.deck_list
                     })
 
             except KeyboardInterrupt:
                 break
 
-if __name__ == "__main__":
-    player_name = sys.argv[1] if len(sys.argv) > 1 else input("Enter player ID: ").strip()
-    custom_deck_file = sys.argv[2] if len(sys.argv) > 2 else "deck.csv"
 
-    deck = load_deck_from_csv(custom_deck_file)
-    client = MTGNPClient(player_name, deck)
+if __name__ == "__main__":
+    print("\nSelect Client Mode:")
+    print("  [1] Play Game")
+    print("  [2] Spectate (God Mode)")
+    mode_choice = input("Enter choice (1 or 2): ").strip()
+
+    if mode_choice == "2":
+        spec_name = input("Enter Spectator ID: ").strip() or f"Observer_{int(time.time())}"
+        client = MTGNPClient(client_id=spec_name, is_spectator=True)
+    else:
+        player_name = sys.argv[1] if len(sys.argv) > 1 else input("Enter Player ID: ").strip()
+        
+        # --- PROMPT FOR DECK FILE ---
+        if len(sys.argv) > 2:
+            custom_deck_file = sys.argv[2]
+        else:
+            deck_input = input("Enter Deck CSV File Path (or press Enter for default 'deck.csv'): ").strip()
+            custom_deck_file = deck_input if deck_input else "deck.csv"
+
+        deck = load_deck_from_csv(custom_deck_file)
+        client = MTGNPClient(client_id=player_name, deck_list=deck, is_spectator=False)
+
     client.connect()
     client.interactive_loop()

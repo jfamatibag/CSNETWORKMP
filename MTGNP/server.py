@@ -10,7 +10,7 @@ import re
 import argparse
 
 HOST = "0.0.0.0"
-PORT = 8080
+PORT = 4444
 VERBOSE = False  # Global verbose toggle
 
 def vprint(message):
@@ -56,7 +56,7 @@ KNOWN_PDU_TYPES = {
     "PING", "PLAYER_READY", "MULLIGAN_CHOICE", "PRIORITY_PASS",
     "PLAY_LAND", "CAST_SPELL", "ACTIVATE_ABILITY", "DECLARE_ATTACKERS",
     "DECLARE_BLOCKERS", "CONCEDE", "TRIGGER_ORDER_RESPONSE", "TRIGGER_CHOICE_RESPONSE",
-    "DISCARD", "ASSIGN_DAMAGE_ORDER" 
+    "DISCARD", "ASSIGN_DAMAGE_ORDER", "SPECTATOR_JOIN" 
 }
 
 # --- Known Base Fallback Mana Costs ---
@@ -162,6 +162,7 @@ def load_card_databases():
 
 # --- Server State ---
 clients = {}
+spectator_clients = {}
 client_locks = threading.Lock()
 seq_counter = 1
 current_priority_seq = None
@@ -332,6 +333,9 @@ def broadcast_game_state_update():
     }
     with client_locks:
         for sock in clients.values():
+            send_pdu(sock, pdu)
+
+        for sock in spectator_clients.values():
             send_pdu(sock, pdu)
 
 def broadcast_game_over(winner_id, reason):
@@ -1042,6 +1046,29 @@ def dispatch_pdu(sock, player_id, pdu):
         send_error(sock, player_id, ERR_UNKNOWN_TYPE, f"PDU type '{pdu_type}' is unrecognized by server protocol.", pdu)
         return
 
+    # --- HANDLE SPECTATOR JOIN ---
+    if pdu_type == "SPECTATOR_JOIN":
+        spec_id = pdu.get("spectator_id", f"spectator_{int(time.time())}")
+        with client_locks:
+            spectator_clients[spec_id] = sock
+        vprint(f"[*] 👁️ Spectator '{spec_id}' connected in God Mode.")
+        
+        # Instantly send full God Mode state upon connection
+        state_copy = copy.deepcopy(game_state)
+        state_copy["battlefield_text"] = format_battlefield(game_state["battlefield"])
+        send_pdu(sock, {
+            "type": "GAME_STATE_UPDATE",
+            "seq_num": get_next_seq(),
+            "state": state_copy
+        })
+        return
+
+    # --- BLOCK SPECTATOR GAMEPLAY ACTIONS ---
+    if player_id not in game_state.get("players", []):
+        if pdu_type not in ["PING", "SPECTATOR_JOIN", "PLAYER_READY"]:
+            send_error(sock, player_id, ERR_ILLEGAL_ACTION, "Spectators cannot perform game actions.", pdu)
+            return
+
     if pdu_type == "PING":
         send_pdu(sock, {"type": "PONG", "seq_num": recv_seq, "timestamp": pdu.get("timestamp")})
         return
@@ -1597,6 +1624,10 @@ def handle_client(sock, addr):
         with client_locks:
             if player_id and player_id in clients:
                 del clients[player_id]
+            # Remove from spectator map if present
+            to_remove = [sid for sid, s in spectator_clients.items() if s == sock]
+            for sid in to_remove:
+                del spectator_clients[sid]
         sock.close()
 
 def main():
