@@ -1,10 +1,15 @@
-HOW TO RUN SERVER
-python server.py
+HOW TO RUN SERVER with verbose mode
+python server.py -v
+python server.py --verbose
+
+To turn on verbose mode during runtime, input:
+v
+verbose
 
 HOW TO RUN CLIENT
 python client.py <playername> <deck>.csv
 
-- deck can be omitted, but it will default to a default deck
+- deck can be omitted, but it will default to a deck.csv
 i.e. python client.py <playername>
 
 SAMPLE FOR CLIENT 
