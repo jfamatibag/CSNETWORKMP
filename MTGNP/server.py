@@ -1064,8 +1064,8 @@ def dispatch_pdu(sock, player_id, pdu):
             vprint(f"[*] Player '{player_id}' sent PLAYER_READY. Total ready: {len(game_state['players'])}/2")
 
         if len(game_state["players"]) == 2:
-            first_player = random.choice(game_state["players"])
-            game_state["active_player"] = first_player
+            _player = random.choice(game_state["players"])
+            game_state["active_player"] = _player
             game_state["phase"] = "MULLIGAN"
             game_state["mulligans"] = {p: {"kept": False, "count": 0} for p in game_state["players"]}
             vprint("[*] Both players connected and ready! Game state updated to MULLIGAN phase.")
@@ -1114,7 +1114,7 @@ def dispatch_pdu(sock, player_id, pdu):
 
         all_kept = all(info.get("kept", False) for info in game_state["mulligans"].values())
         if all_kept and len(game_state["mulligans"]) == 2:
-            first_player = game_state["players"][0]
+            first_player = game_state["active_player"]
             game_state["phase"] = "PRECOMBAT_MAIN"
             vprint(f"[*] Both players kept hands. Phase changed to PRECOMBAT_MAIN. Player '{first_player}' begins Turn 1.")
             broadcast_game_state_update()
